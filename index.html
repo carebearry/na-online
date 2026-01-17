@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual NA Meeting Finder</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body {
+            background-color: #f3f4f6; /* Gray-100 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Custom scrollbar for formats */
+        .format-scroll::-webkit-scrollbar {
+            height: 4px;
+        }
+        .format-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        .format-scroll::-webkit-scrollbar-thumb {
+            background: #d1d5db; 
+            border-radius: 2px;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- Embedded Icons ---
+        const IconBase = ({ children, size = 16, className = "", ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`inline-block align-text-bottom ${className}`} {...props}>
+                {children}
+            </svg>
+        );
+
+        const Icons = {
+            Globe: (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></IconBase>,
+            Search: (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></IconBase>,
+            Atom: (props) => <IconBase {...props}><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/></IconBase>,
+            Star: (props) => <IconBase {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></IconBase>,
+            Upload: (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></IconBase>,
+            Clock: (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>,
+            Users: (props) => <IconBase {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>,
+            Video: (props) => <IconBase {...props}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></IconBase>,
+            MapPin: (props) => <IconBase {...props}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconBase>,
+            Info: (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></IconBase>,
+            Link: (props) => <IconBase {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>,
+            X: (props) => <IconBase {...props}><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></IconBase>,
+            Filter: (props) => <IconBase {...props}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></IconBase>,
+            ChevronDown: (props) => <IconBase {...props}><polyline points="6 9 12 15 18 9"/></IconBase>,
+            ChevronUp: (props) => <IconBase {...props}><polyline points="18 15 12 9 6 15"/></IconBase>,
+            Play: (props) => <IconBase {...props}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>,
+            // Special Format Icons
+            Venus: (props) => <IconBase {...props}><path d="M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"/><path d="M12 15v7"/><path d="M9 19h6"/></IconBase>,
+            Mars: (props) => <IconBase {...props}><path d="M16 3h5v5"/><path d="M21 3 13.5 10.5"/><path d="M11.5 11.5a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"/></IconBase>,
+            Heart: (props) => <IconBase {...props}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></IconBase>,
+            Lock: (props) => <IconBase {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>,
+            Unlock: (props) => <IconBase {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></IconBase>,
+            Book: (props) => <IconBase {...props}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></IconBase>,
+            Mic: (props) => <IconBase {...props}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="23"/><line x1="8" x2="16" y1="23" y2="23"/></IconBase>,
+            Sprout: (props) => <IconBase {...props}><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></IconBase>,
+            Layers: (props) => <IconBase {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></IconBase>
+        };
+
+        // --- Constants & Config ---
+
+        const DAYS = [
+            { id: 1, name: 'Sunday', short: 'Sun' },
+            { id: 2, name: 'Monday', short: 'Mon' },
+            { id: 3, name: 'Tuesday', short: 'Tue' },
+            { id: 4, name: 'Wednesday', short: 'Wed' },
+            { id: 5, name: 'Thursday', short: 'Thu' },
+            { id: 6, name: 'Friday', short: 'Fri' },
+            { id: 7, name: 'Saturday', short: 'Sat' },
+        ];
+
+        // Map Format Codes to Icons and Colors
+        const FORMAT_ICONS = {
+            'W': { icon: Icons.Venus, color: 'text-pink-600', bg: 'bg-pink-50' },
+            'CW': { icon: Icons.Venus, color: 'text-pink-600', bg: 'bg-pink-50' },
+            'M': { icon: Icons.Mars, color: 'text-blue-600', bg: 'bg-blue-50' },
+            'GL': { icon: Icons.Heart, color: 'text-orange-500', bg: 'bg-orange-50' },
+            'LGBTQ': { icon: Icons.Heart, color: 'text-orange-500', bg: 'bg-orange-50' },
+            'C': { icon: Icons.Lock, color: 'text-red-600', bg: 'bg-red-50' },
+            'O': { icon: Icons.Unlock, color: 'text-green-600', bg: 'bg-green-50' },
+            'HY': { icon: Icons.Layers, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+            'BK': { icon: Icons.Book, color: 'text-amber-700', bg: 'bg-amber-50' },
+            'LIT': { icon: Icons.Book, color: 'text-amber-700', bg: 'bg-amber-50' },
+            'SPAD': { icon: Icons.Book, color: 'text-amber-700', bg: 'bg-amber-50' },
+            'JFT': { icon: Icons.Book, color: 'text-amber-700', bg: 'bg-amber-50' },
+            'SP': { icon: Icons.Mic, color: 'text-purple-600', bg: 'bg-purple-50' },
+            'K': { icon: Icons.Mic, color: 'text-purple-600', bg: 'bg-purple-50' },
+            'BE': { icon: Icons.Sprout, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            'N': { icon: Icons.Sprout, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        };
+
+        const DEFAULT_MEETINGS = [];
+        const DEFAULT_FORMATS = [];
+
+        // API Configuration
+        const JSONP_CALLBACK_NAME = 'virtualNABrowserCallback';
+        // Note: Replaced the fixed timestamp callback with a static name for our global function
+        const API_URL = `https://bmlt.virtual-na.org/main_server/client_interface/jsonp/?switcher=GetSearchResults&get_used_formats&lang_enum=en&data_field_key=location_postal_code_1,duration_time,start_time,time_zone,weekday_tinyint,service_body_bigint,longitude,latitude,location_province,location_municipality,location_street,location_info,location_neighborhood,formats,format_shared_id_list,comments,meeting_name,location_sub_province,worldid_mixed,root_server_uri,id_bigint,venue_type,location_text,virtual_meeting_additional_info,virtual_meeting_link,phone_meeting_number,wheelchair&services%5B%5D=4&recursive=1&sort_keys=start_time&callback=${JSONP_CALLBACK_NAME}`;
+
+
+        // --- Helper Functions ---
+
+        const cleanJsonp = (text) => {
+            if (!text) return null;
+            try {
+                // Try direct parse first
+                return JSON.parse(text);
+            } catch (e) {
+                // Try removing JSONP wrapper: /**/callback({...})
+                try {
+                    const start = text.indexOf('(');
+                    const end = text.lastIndexOf(')');
+                    if (start !== -1 && end !== -1) {
+                        return JSON.parse(text.substring(start + 1, end));
+                    }
+                } catch(e2) {}
+                
+                try {
+                    const first = text.search(/[\{\[]/);
+                    const last = text.search(/[\]\}][^\]\}]*$/); 
+                    if(first > -1 && last > -1) {
+                         return JSON.parse(text.substring(first, last + 1));
+                    }
+                } catch(e3) {
+                     console.error("Failed to parse JSON", e3);
+                }
+                return null;
+            }
+        };
+
+        const isSecular = (meeting, formatMap) => {
+            const secularKeywords = ['agnostic', 'atheist', 'secular', 'freethink', 'godless', 'humanist', 'rational', 'skeptic', 'beyond belief', 'we agnostics'];
+            const name = (meeting.meeting_name || '').toLowerCase();
+            const codes = (meeting.formats || '').split(',').map(c => c.trim());
+            
+            if (secularKeywords.some(k => name.includes(k))) return true;
+
+            const hasSecularCode = codes.some(code => {
+                if (code === 'AG' || code === 'AT') return true;
+                const fmt = formatMap[code];
+                if (fmt && secularKeywords.some(k => fmt.name_string.toLowerCase().includes(k))) return true;
+                return false;
+            });
+
+            return hasSecularCode;
+        };
+
+        const isWomenOnly = (meeting, formatMap) => {
+             const codes = (meeting.formats || '').split(',').map(c => c.trim());
+             return codes.some(code => {
+                 if (code === 'W' || code === 'CW') return true;
+                 const fmt = formatMap[code];
+                 if (fmt && (fmt.name_string.toLowerCase().includes('women') || fmt.name_string.toLowerCase().includes('ladies'))) return true;
+                 return false;
+             });
+        };
+
+        const formatTimeZoneName = (tz) => {
+            if (!tz) return "Unknown Location";
+            const parts = tz.split('/');
+            if (parts.length === 2) {
+                const region = parts[0].replace('_', ' ');
+                const city = parts[1].replace('_', ' ');
+                return `${city} (${region})`;
+            }
+            return tz;
+        };
+
+        const getLocalTime = (weekdayTinyInt, startTimeStr, timeZone) => {
+            try {
+                const [h, m, s] = startTimeStr.split(':').map(Number);
+                const getOffset = (timeZone, date) => {
+                    const tzTime = new Date(date.toLocaleString("en-US", {timeZone}));
+                    const utcTime = new Date(date.toLocaleString("en-US", {timeZone: "UTC"}));
+                    return (tzTime - utcTime) / 60000;
+                };
+
+                const date = new Date();
+                const localOffset = date.getTimezoneOffset() * -1;
+                const remoteOffset = getOffset(timeZone, date);
+                
+                const diffMinutes = localOffset - remoteOffset;
+                
+                let localH = h;
+                let localM = m + diffMinutes;
+                
+                while(localM >= 60) { localH++; localM -= 60; }
+                while(localM < 0) { localH--; localM += 60; }
+                while(localH >= 24) localH -= 24;
+                while(localH < 0) localH += 24;
+
+                const localTimeStr = `${localH.toString().padStart(2, '0')}:${localM.toString().padStart(2, '0')}`;
+                return { time: localTimeStr, shift: 0, h: localH, m: localM }; 
+
+            } catch (e) {
+                return { time: startTimeStr, shift: 0, error: true, h: 0, m: 0 };
+            }
+        };
+
+        const getMeetingStatus = (localTimeObj, durationStr, weekday) => {
+            if (!localTimeObj || !durationStr) return null;
+            
+            // Only calculate status if the meeting day is TODAY
+            const now = new Date();
+            const currentDay = now.getDay() + 1; // 1=Sun (BMLT Standard matches JS getDay+1)
+            
+            if (parseInt(weekday) !== currentDay) return null;
+
+            const currentMins = now.getHours() * 60 + now.getMinutes();
+            const meetingStartMins = localTimeObj.h * 60 + localTimeObj.m;
+            
+            const [dh, dm] = durationStr.split(':').map(Number);
+            const durationMins = dh * 60 + dm;
+            
+            const diffStart = meetingStartMins - currentMins;
+            const diffProgress = currentMins - meetingStartMins;
+
+            // Logic: Starting in next 45 mins
+            if (diffStart > 0 && diffStart <= 45) {
+                return { type: 'soon', text: `Starting in ${diffStart} min`, minutes: diffStart };
+            }
+            
+            // Logic: In progress
+            if (diffProgress >= 0 && diffProgress < durationMins) {
+                return { type: 'active', text: `In progress... started ${diffProgress} min ago`, minutes: diffProgress };
+            }
+
+            return null;
+        };
+
+        // --- Components ---
+
+        const FileUploader = ({ onDataLoaded }) => {
+            const handleFile = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const clean = cleanJsonp(evt.target.result);
+                    if (clean) onDataLoaded(clean);
+                };
+                reader.readAsText(file);
+            };
+
+            return (
+                <div className="bg-white p-4 rounded-lg shadow mb-6 border border-blue-100">
+                    <h3 className="font-semibold text-blue-800 flex items-center gap-2 mb-3">
+                        <Icons.Upload size={18} /> Manually Load Data
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-2">
+                        Could not load data from API automatically. You can upload "meetings.json" manually here.
+                    </p>
+                    <div className="flex flex-col">
+                        <label className="text-xs font-medium text-gray-500 mb-1">meetings.json</label>
+                        <input type="file" onChange={handleFile} className="text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                    </div>
+                </div>
+            );
+        };
+
+        const FormatTag = ({ code, formatMap }) => {
+            const def = formatMap[code];
+            const config = FORMAT_ICONS[code] || { icon: null, color: 'text-gray-600', bg: 'bg-gray-100' };
+            const Icon = config.icon;
+            
+            const label = def ? def.name_string : code;
+            const description = def ? def.description_string : "";
+
+            return (
+                <span 
+                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border border-transparent ${config.color} ${config.bg} cursor-help transition-colors hover:border-current`} 
+                    title={description || label}
+                >
+                    {Icon && <Icon size={12} />}
+                    {label}
+                </span>
+            );
+        };
+
+        const MeetingCard = ({ meeting, formatMap, toggleFav, isFav, recurring }) => {
+            const { meeting_name, start_time, duration_time, time_zone, formats, virtual_meeting_link, weekday_tinyint } = meeting;
+            
+            const formatList = (formats || '').split(',').map(c => c.trim()).filter(Boolean);
+            const isSecularMeeting = isSecular(meeting, formatMap);
+            const localTimeObj = getLocalTime(weekday_tinyint, start_time, time_zone);
+            const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const locationLabel = formatTimeZoneName(time_zone);
+            
+            const status = getMeetingStatus(localTimeObj, duration_time, weekday_tinyint);
+
+            return (
+                <div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-5 transition-all card-hover flex flex-col h-full relative ${isSecularMeeting ? 'ring-2 ring-purple-100' : ''}`}>
+                    <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1 pr-2">
+                            <h3 className="font-bold text-lg text-gray-800 leading-tight">
+                                {meeting_name}
+                            </h3>
+                            {/* Status Badges */}
+                            {status && status.type === 'active' && (
+                                <div className="inline-flex items-center gap-1.5 px-2 py-1 mt-1.5 rounded bg-blue-50 text-blue-700 text-xs font-semibold animate-pulse">
+                                    <Icons.Play size={10} fill="currentColor" />
+                                    {status.text}
+                                </div>
+                            )}
+                            {status && status.type === 'soon' && (
+                                <div className="inline-flex items-center gap-1.5 px-2 py-1 mt-1.5 rounded bg-amber-50 text-amber-700 text-xs font-semibold">
+                                    <Icons.Clock size={10} />
+                                    {status.text}
+                                </div>
+                            )}
+
+                            {isSecularMeeting && (
+                                <div className="mt-1">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-bold uppercase tracking-wider">
+                                        <Icons.Atom size={12} /> Secular / Freethinker
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        <button 
+                            onClick={() => toggleFav(meeting.id_bigint)}
+                            className={`p-2 rounded-full transition-colors ${isFav ? 'text-yellow-400 bg-yellow-50' : 'text-gray-300 hover:bg-gray-100'}`}
+                        >
+                            <Icons.Star size={20} fill={isFav ? "currentColor" : "none"} />
+                        </button>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                        <div className="flex items-center gap-2 text-gray-700">
+                            <Icons.Clock size={16} className="text-blue-500" />
+                            <span className="font-mono font-semibold text-lg">{localTimeObj.time}</span>
+                            <span className="text-xs text-gray-400">({userTimeZone})</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-500 text-sm">
+                            <Icons.Globe size={16} className="text-gray-400" />
+                            <span>{locationLabel}</span>
+                        </div>
+                    </div>
+
+                    {recurring.length > 0 && (
+                        <div className="mb-3 p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs text-gray-600">
+                            <div className="flex items-center gap-1 font-semibold mb-1">
+                                <Icons.Users size={12} /> Also meets on:
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                                {recurring.map(dayId => (
+                                    <span key={dayId} className="px-1.5 py-0.5 bg-white border rounded shadow-sm">
+                                        {DAYS.find(d => d.id === parseInt(dayId))?.short}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex-1 mb-4">
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto format-scroll pr-1">
+                            {formatList.map(code => (
+                                <FormatTag key={code} code={code} formatMap={formatMap} />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mt-auto pt-4 border-t border-gray-100">
+                        {virtual_meeting_link ? (
+                            <a href={virtual_meeting_link} target="_blank" rel="noopener noreferrer" 
+                               className="flex items-center justify-center gap-2 w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm">
+                                <Icons.Video size={16} /> Join Meeting
+                            </a>
+                        ) : (
+                            <button disabled className="w-full py-2.5 bg-gray-100 text-gray-400 rounded-lg font-medium text-sm cursor-not-allowed">
+                                No Link Available
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const FilterPanel = ({ 
+            availableLangs, availableFormats, 
+            timeRange, setTimeRange,
+            selectedLangs, setSelectedLangs,
+            selectedFormats, setSelectedFormats
+        }) => {
+            
+            const handleTimeChange = (type, val) => {
+                setTimeRange(prev => ({ ...prev, [type]: val }));
+            };
+
+            const toggleSetItem = (set, setFn, item) => {
+                const next = new Set(set);
+                if (next.has(item)) next.delete(item);
+                else next.add(item);
+                setFn(next);
+            };
+
+            return (
+                <div className="bg-white border-b border-gray-200 py-6 px-4 animate-fade-in shadow-inner">
+                    <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+                        
+                        {/* Time Filter */}
+                        <div>
+                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                <Icons.Clock size={16} className="text-blue-600"/> Time (Local)
+                            </h4>
+                            <div className="flex items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <input 
+                                    type="time" 
+                                    value={timeRange.start} 
+                                    onChange={(e) => handleTimeChange('start', e.target.value)}
+                                    className="bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 block w-full p-2" 
+                                />
+                                <span className="text-gray-400">-</span>
+                                <input 
+                                    type="time" 
+                                    value={timeRange.end} 
+                                    onChange={(e) => handleTimeChange('end', e.target.value)}
+                                    className="bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 block w-full p-2" 
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Filter by your local time ({Intl.DateTimeFormat().resolvedOptions().timeZone}).
+                            </p>
+                        </div>
+
+                        {/* Languages */}
+                        <div>
+                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                <Icons.Globe size={16} className="text-blue-600"/> Languages
+                            </h4>
+                            <div className="max-h-48 overflow-y-auto pr-2 space-y-1 format-scroll">
+                                {availableLangs.map(l => (
+                                    <label key={l.key_string} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedLangs.has(l.key_string)} 
+                                            onChange={() => toggleSetItem(selectedLangs, setSelectedLangs, l.key_string)}
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm text-gray-700">{l.name_string}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Formats */}
+                        <div>
+                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                <Icons.Layers size={16} className="text-blue-600"/> Formats
+                            </h4>
+                            <div className="max-h-48 overflow-y-auto pr-2 space-y-1 format-scroll">
+                                {availableFormats.map(f => (
+                                    <label key={f.key_string} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedFormats.has(f.key_string)} 
+                                            onChange={() => toggleSetItem(selectedFormats, setSelectedFormats, f.key_string)}
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm text-gray-700">{f.name_string}</span>
+                                        <span className="text-xs text-gray-400 ml-auto">{f.key_string}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main Application ---
+
+        const App = () => {
+            const [rawMeetings, setRawMeetings] = useState(DEFAULT_MEETINGS);
+            const [rawFormats, setRawFormats] = useState(DEFAULT_FORMATS);
+            const [isLoading, setIsLoading] = useState(true);
+            const [favorites, setFavorites] = useState(() => {
+                const saved = localStorage.getItem('na_favs');
+                return saved ? JSON.parse(saved) : [];
+            });
+            
+            // Filter States
+            const [selectedDay, setSelectedDay] = useState(new Date().getDay() + 1);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [showFilters, setShowFilters] = useState(false);
+            
+            // Advanced Filters
+            const [timeRange, setTimeRange] = useState({ start: "07:30", end: "23:00" });
+            const [selectedLangs, setSelectedLangs] = useState(new Set(['ENG'])); // Enable English by default
+            const [selectedFormats, setSelectedFormats] = useState(new Set());
+            
+            // Quick toggles (kept for convenience, mapped to advanced logic internally if needed, or separate)
+            // To avoid conflict, let's keep quick toggles as "Presets" that affect logic separately
+            const [showSecularOnly, setShowSecularOnly] = useState(false);
+            const [showWomenOnly, setShowWomenOnly] = useState(false);
+            const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+            // Fetch Logic with JSONP for API
+            useEffect(() => {
+                let scriptId = 'bmlt-api-script';
+
+                // Define global callback
+                window[JSONP_CALLBACK_NAME] = (data) => {
+                    processData(data);
+                    setIsLoading(false);
+                    // Cleanup script tag
+                    const script = document.getElementById(scriptId);
+                    if (script) document.body.removeChild(script);
+                };
+
+                const fetchApiData = () => {
+                    // Check if already present
+                    if (document.getElementById(scriptId)) return;
+
+                    const script = document.createElement('script');
+                    script.id = scriptId;
+                    script.src = API_URL;
+                    script.onerror = () => {
+                        console.error('API Load Error');
+                        setIsLoading(false);
+                    };
+                    document.body.appendChild(script);
+                };
+
+                fetchApiData();
+
+                // Cleanup global on unmount
+                return () => {
+                    delete window[JSONP_CALLBACK_NAME];
+                };
+            }, []);
+
+            const processData = (data) => {
+                if (!data) return;
+                let meetings = [];
+                let formats = [];
+
+                if (Array.isArray(data)) meetings = data;
+                else if (data.meetings) meetings = data.meetings;
+
+                if (data.formats) formats = data.formats;
+
+                setRawMeetings(meetings);
+                if (formats.length > 0) setRawFormats(formats);
+            };
+
+            const formatMap = useMemo(() => {
+                const map = {};
+                if (Array.isArray(rawFormats)) {
+                    rawFormats.forEach(f => map[f.key_string] = f);
+                }
+                return map;
+            }, [rawFormats]);
+
+            // Group Formats for Filter UI
+            const { langOptions, formatOptions } = useMemo(() => {
+                const langs = [];
+                const others = [];
+                if (Array.isArray(rawFormats)) {
+                    rawFormats.forEach(f => {
+                        if (f.format_type_enum === 'LANG') langs.push(f);
+                        else others.push(f);
+                    });
+                }
+                // Sort
+                langs.sort((a,b) => a.name_string.localeCompare(b.name_string));
+                others.sort((a,b) => a.name_string.localeCompare(b.name_string));
+                return { langOptions: langs, formatOptions: others };
+            }, [rawFormats]);
+
+            const meetingGroups = useMemo(() => {
+                const groups = {};
+                const list = Array.isArray(rawMeetings) ? rawMeetings : [];
+                list.forEach(m => {
+                    if (!groups[m.meeting_name]) groups[m.meeting_name] = new Set();
+                    groups[m.meeting_name].add(m.weekday_tinyint);
+                });
+                return groups;
+            }, [rawMeetings]);
+
+            const meetingsList = Array.isArray(rawMeetings) ? rawMeetings : [];
+
+            // Main Filter Logic
+            const filteredMeetings = useMemo(() => {
+                let filtered = meetingsList;
+
+                // 1. Day
+                filtered = filtered.filter(m => parseInt(m.weekday_tinyint) === selectedDay);
+
+                // 2. Search
+                if (searchTerm) {
+                    const lower = searchTerm.toLowerCase();
+                    filtered = filtered.filter(m => 
+                        m.meeting_name.toLowerCase().includes(lower) || 
+                        (m.formats && m.formats.toLowerCase().includes(lower))
+                    );
+                }
+
+                // 3. Quick Filters
+                if (showSecularOnly) filtered = filtered.filter(m => isSecular(m, formatMap));
+                if (showWomenOnly) filtered = filtered.filter(m => isWomenOnly(m, formatMap));
+                if (showFavoritesOnly) filtered = filtered.filter(m => favorites.includes(m.id_bigint));
+
+                // 4. Advanced Time Filter
+                // Convert filter time strings to minutes
+                const [startH, startM] = timeRange.start.split(':').map(Number);
+                const [endH, endM] = timeRange.end.split(':').map(Number);
+                const filterStartMins = startH * 60 + startM;
+                const filterEndMins = endH * 60 + endM;
+
+                filtered = filtered.filter(m => {
+                    const local = getLocalTime(m.weekday_tinyint, m.start_time, m.time_zone);
+                    if (local.error) return true; // Keep if we can't parse
+                    const localMins = local.h * 60 + local.m;
+                    return localMins >= filterStartMins && localMins <= filterEndMins;
+                });
+
+                // 5. Advanced Language Filter (OR Logic)
+                if (selectedLangs.size > 0) {
+                    filtered = filtered.filter(m => {
+                        const mFormats = (m.formats || '').split(',').map(s => s.trim());
+                        // If meeting has ANY of the selected languages
+                        return mFormats.some(code => selectedLangs.has(code));
+                    });
+                }
+
+                // 6. Advanced Format Filter (AND Logic)
+                if (selectedFormats.size > 0) {
+                    filtered = filtered.filter(m => {
+                        const mFormats = (m.formats || '').split(',').map(s => s.trim());
+                        // If meeting has ALL of the selected formats
+                        // Actually, for better UX with things like "Open" + "Virtual", "AND" is usually best.
+                        // But let's check if user selects "Closed" and "Open" (impossible). 
+                        // Let's stick to AND for now as it's a "Filter".
+                        return Array.from(selectedFormats).every(code => mFormats.includes(code));
+                    });
+                }
+
+                return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
+            }, [meetingsList, selectedDay, searchTerm, showSecularOnly, showWomenOnly, showFavoritesOnly, favorites, formatMap, timeRange, selectedLangs, selectedFormats]);
+
+            const toggleFavorite = (id) => {
+                const newFavs = favorites.includes(id) 
+                    ? favorites.filter(fid => fid !== id)
+                    : [...favorites, id];
+                setFavorites(newFavs);
+                localStorage.setItem('na_favs', JSON.stringify(newFavs));
+            };
+
+            const countsPerDay = useMemo(() => {
+                const counts = {};
+                DAYS.forEach(d => counts[d.id] = 0);
+                meetingsList.forEach(m => {
+                    const d = parseInt(m.weekday_tinyint);
+                    if (counts[d] !== undefined) counts[d]++;
+                });
+                return counts;
+            }, [meetingsList]);
+
+            return (
+                <div className="min-h-screen pb-20">
+                    {/* Top Nav */}
+                    <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+                        <div className="max-w-6xl mx-auto px-4 py-4">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-600 p-2 rounded-lg text-white">
+                                        <Icons.Globe size={24} />
+                                    </div>
+                                    <div>
+                                        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Virtual NA Browser</h1>
+                                        <p className="text-xs text-gray-500">
+                                            Displaying in your time: <span className="font-semibold text-gray-700">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    <div className="relative">
+                                        <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search..." 
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="pl-9 pr-4 py-2 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-0 rounded-full text-sm w-full md:w-56 transition-all outline-none border"
+                                        />
+                                    </div>
+
+                                    <button 
+                                        onClick={() => setShowFilters(!showFilters)}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showFilters ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                    >
+                                        <Icons.Filter size={16} />
+                                        <span className="hidden lg:inline">Filters</span>
+                                        {showFilters ? <Icons.ChevronUp size={14}/> : <Icons.ChevronDown size={14}/>}
+                                        { (selectedLangs.size > 0 || selectedFormats.size > 0) && 
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-600"></span> 
+                                        }
+                                    </button>
+                                    
+                                    <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
+
+                                    <button onClick={() => setShowSecularOnly(!showSecularOnly)} className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showSecularOnly ? 'bg-purple-100 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                        <Icons.Atom size={16} /> <span className="hidden lg:inline">Secular</span>
+                                    </button>
+
+                                    <button onClick={() => setShowWomenOnly(!showWomenOnly)} className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showWomenOnly ? 'bg-pink-100 border-pink-200 text-pink-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                        <Icons.Venus size={16} /> <span className="hidden lg:inline">Women</span>
+                                    </button>
+
+                                    <button onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showFavoritesOnly ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                        <Icons.Star size={16} fill={showFavoritesOnly ? "currentColor" : "none"}/> <span className="hidden lg:inline">Favs</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Day Tabs */}
+                            <div className="flex items-center gap-1 mt-6 overflow-x-auto pb-1 scrollbar-hide">
+                                {DAYS.map(day => {
+                                    const isSelected = selectedDay === day.id;
+                                    const count = countsPerDay[day.id] || 0;
+                                    return (
+                                        <button
+                                            key={day.id}
+                                            onClick={() => setSelectedDay(day.id)}
+                                            className={`relative flex flex-col items-center justify-center min-w-[4.5rem] py-3 rounded-xl transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'}`}
+                                        >
+                                            <span className="text-xs font-medium uppercase tracking-wider opacity-80">{day.short}</span>
+                                            {isSelected && <span className="absolute bottom-1 w-1 h-1 bg-white rounded-full"></span>}
+                                            {count > 0 && !isSelected && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-400 rounded-full"></span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Filter Panel */}
+                    {showFilters && (
+                        <FilterPanel 
+                            availableLangs={langOptions}
+                            availableFormats={formatOptions}
+                            timeRange={timeRange}
+                            setTimeRange={setTimeRange}
+                            selectedLangs={selectedLangs}
+                            setSelectedLangs={setSelectedLangs}
+                            selectedFormats={selectedFormats}
+                            setSelectedFormats={setSelectedFormats}
+                        />
+                    )}
+
+                    {/* Content */}
+                    <main className="max-w-6xl mx-auto px-4 py-6">
+                        
+                        {isLoading && (
+                             <div className="text-center py-10">
+                                <div className="loading-spinner mx-auto mb-2"></div>
+                                <p className="text-gray-400 text-sm">Loading live meetings...</p>
+                            </div>
+                        )}
+
+                        {!isLoading && meetingsList.length === 0 && (
+                            <FileUploader onDataLoaded={processData} />
+                        )}
+
+                        {!isLoading && meetingsList.length > 0 && (
+                            <>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-800">
+                                        {DAYS.find(d => d.id === selectedDay)?.name} 
+                                        <span className="text-gray-400 font-normal text-lg ml-2">
+                                            ({filteredMeetings.length} meetings)
+                                        </span>
+                                    </h2>
+                                    { (selectedLangs.size > 0 || selectedFormats.size > 0) && 
+                                        <div className="text-xs text-blue-600 font-medium bg-blue-50 px-3 py-1 rounded-full">
+                                            Filters Active
+                                        </div>
+                                    }
+                                </div>
+
+                                {filteredMeetings.length === 0 ? (
+                                    <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+                                        <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-50 rounded-full mb-4">
+                                            <Icons.Search className="text-gray-400" size={32} />
+                                        </div>
+                                        <h3 className="text-lg font-medium text-gray-900">No meetings found</h3>
+                                        <p className="text-gray-500 mt-1 max-w-sm mx-auto">
+                                            Try adjusting your filters, searching for something else, or changing the day.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {filteredMeetings.map(meeting => {
+                                            const allDays = meetingGroups[meeting.meeting_name] || new Set();
+                                            const otherDays = Array.from(allDays).filter(d => parseInt(d) !== parseInt(meeting.weekday_tinyint));
+                                            
+                                            return (
+                                                <MeetingCard 
+                                                    key={meeting.id_bigint} 
+                                                    meeting={meeting} 
+                                                    formatMap={formatMap}
+                                                    toggleFav={toggleFavorite}
+                                                    isFav={favorites.includes(meeting.id_bigint)}
+                                                    recurring={otherDays}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </main>
+                    
+                    <footer className="max-w-6xl mx-auto px-4 py-8 text-center text-gray-400 text-sm">
+                        <p>Virtual NA Browser &bull; Designed for Recovery</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
