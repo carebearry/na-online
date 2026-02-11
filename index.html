@@ -334,13 +334,17 @@
             if (code === 'C') label = 'NA Members';
             
             const description = def ? def.description_string : "";
+            
+            // Add step emoji for step-related formats
+            const isStep = label.toLowerCase().includes('step') || code === 'S' || code === 'St' || code === 'STEP';
 
             return (
                 <span 
                     className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border border-transparent ${config.color} ${config.bg} cursor-help transition-colors hover:border-current`} 
                     title={description || label}
                 >
-                    {Icon && <Icon size={12} />}
+                    {isStep && <span>👣</span>}
+                    {Icon && !isStep && <Icon size={12} />}
                     {label}
                 </span>
             );
@@ -511,6 +515,7 @@
             timeRange, setTimeRange,
             selectedLangs, setSelectedLangs,
             selectedFormats, setSelectedFormats,
+            selectedFormatsOr, setSelectedFormatsOr,
             showFilters, setShowFilters
         }) => {
             
@@ -554,6 +559,7 @@
                                 setTimeRange({ start, end: '23:59' });
                                 setSelectedLangs(new Set(['ENG']));
                                 setSelectedFormats(new Set());
+                                setSelectedFormatsOr(new Set());
                             }}
                             className="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
                         >
@@ -596,19 +602,19 @@
 
                         {/* Languages */}
                         <div>
-                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
                                 <Icons.Globe size={16} className="text-blue-600"/> Languages
                             </h4>
-                            <div className="max-h-64 overflow-y-auto pr-2 space-y-1 format-scroll">
+                            <div className="max-h-32 overflow-y-auto pr-2 space-y-0 format-scroll">
                                 {availableLangs.map(l => (
-                                    <label key={l.key_string} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                                    <label key={l.key_string} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
                                         <input 
                                             type="checkbox" 
                                             checked={selectedLangs.has(l.key_string)} 
                                             onChange={() => toggleSetItem(selectedLangs, setSelectedLangs, l.key_string)}
-                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                            className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                                         />
-                                        <span className="text-sm text-gray-700">{l.name_string}</span>
+                                        <span className="text-xs text-gray-700">{l.name_string}</span>
                                     </label>
                                 ))}
                             </div>
@@ -618,22 +624,54 @@
 
                         {/* Formats */}
                         <div>
-                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
                                 <Icons.Layers size={16} className="text-blue-600"/> Formats
                             </h4>
-                            <div className="max-h-64 overflow-y-auto pr-2 space-y-1 format-scroll">
-                                {availableFormats.map(f => (
-                                    <label key={f.key_string} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={selectedFormats.has(f.key_string)} 
-                                            onChange={() => toggleSetItem(selectedFormats, setSelectedFormats, f.key_string)}
-                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                        />
-                                        <span className="text-sm text-gray-700">{f.name_string}</span>
-                                        <span className="text-xs text-gray-400 ml-auto">{f.key_string}</span>
-                                    </label>
-                                ))}
+                            <div className="flex items-center gap-4 mb-2 text-xs text-gray-500 px-2">
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-600 inline-block"></span> AND (must have)</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block"></span> OR (any of)</span>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto pr-2 space-y-0 format-scroll">
+                                {availableFormats.map(f => {
+                                    const isAnd = selectedFormats.has(f.key_string);
+                                    const isOr = selectedFormatsOr.has(f.key_string);
+                                    return (
+                                        <div key={f.key_string} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50">
+                                            {/* AND button (square) */}
+                                            <button
+                                                onClick={() => {
+                                                    const next = new Set(selectedFormats);
+                                                    if (next.has(f.key_string)) next.delete(f.key_string);
+                                                    else { next.add(f.key_string); const orNext = new Set(selectedFormatsOr); orNext.delete(f.key_string); setSelectedFormatsOr(orNext); }
+                                                    setSelectedFormats(next);
+                                                }}
+                                                className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                                                    isAnd ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 hover:border-blue-400'
+                                                }`}
+                                                title="AND: meeting must have this format"
+                                            >
+                                                {isAnd && <span className="text-[8px] font-bold">✓</span>}
+                                            </button>
+                                            {/* OR button (circle) */}
+                                            <button
+                                                onClick={() => {
+                                                    const next = new Set(selectedFormatsOr);
+                                                    if (next.has(f.key_string)) next.delete(f.key_string);
+                                                    else { next.add(f.key_string); const andNext = new Set(selectedFormats); andNext.delete(f.key_string); setSelectedFormats(andNext); }
+                                                    setSelectedFormatsOr(next);
+                                                }}
+                                                className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                                                    isOr ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'
+                                                }`}
+                                                title="OR: meeting can have any of the selected"
+                                            >
+                                                {isOr && <span className="text-[8px] font-bold">✓</span>}
+                                            </button>
+                                            <span className="text-sm text-gray-700 flex-1">{f.name_string}</span>
+                                            <span className="text-xs text-gray-400">{f.key_string}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -669,6 +707,7 @@
             });
             const [selectedLangs, setSelectedLangs] = useState(new Set(['ENG'])); // Enable English by default
             const [selectedFormats, setSelectedFormats] = useState(new Set());
+            const [selectedFormatsOr, setSelectedFormatsOr] = useState(new Set());
             
             // Quick toggles (kept for convenience, mapped to advanced logic internally if needed, or separate)
             // To avoid conflict, let's keep quick toggles as "Presets" that affect logic separately
@@ -817,11 +856,15 @@
                 if (selectedFormats.size > 0) {
                     filtered = filtered.filter(m => {
                         const mFormats = (m.formats || '').split(',').map(s => s.trim());
-                        // If meeting has ALL of the selected formats
-                        // Actually, for better UX with things like "Open" + "Virtual", "AND" is usually best.
-                        // But let's check if user selects "Closed" and "Open" (impossible). 
-                        // Let's stick to AND for now as it's a "Filter".
                         return Array.from(selectedFormats).every(code => mFormats.includes(code));
+                    });
+                }
+
+                // 7. Advanced Format Filter (OR Logic)
+                if (selectedFormatsOr.size > 0) {
+                    filtered = filtered.filter(m => {
+                        const mFormats = (m.formats || '').split(',').map(s => s.trim());
+                        return Array.from(selectedFormatsOr).some(code => mFormats.includes(code));
                     });
                 }
 
@@ -839,7 +882,7 @@
                 }
                 
                 return filtered;
-            }, [meetingsList, selectedDay, searchTerm, showSecularOnly, showWomenOnly, showUSAOnly, showFavoritesOnly, favorites, formatMap, timeRange, selectedLangs, selectedFormats, sortBy]);
+            }, [meetingsList, selectedDay, searchTerm, showSecularOnly, showWomenOnly, showUSAOnly, showFavoritesOnly, favorites, formatMap, timeRange, selectedLangs, selectedFormats, selectedFormatsOr, sortBy]);
 
             const toggleFavorite = (id) => {
                 const newFavs = favorites.includes(id) 
@@ -898,6 +941,12 @@
                         return Array.from(selectedFormats).every(code => mFormats.includes(code));
                     });
                 }
+                if (selectedFormatsOr.size > 0) {
+                    filtered = filtered.filter(m => {
+                        const mFormats = (m.formats || '').split(',').map(s => s.trim());
+                        return Array.from(selectedFormatsOr).some(code => mFormats.includes(code));
+                    });
+                }
                 
                 // Sort by local time
                 filtered.sort((a, b) => {
@@ -931,6 +980,8 @@
                         setSelectedLangs={setSelectedLangs}
                         selectedFormats={selectedFormats}
                         setSelectedFormats={setSelectedFormats}
+                        selectedFormatsOr={selectedFormatsOr}
+                        setSelectedFormatsOr={setSelectedFormatsOr}
                         showFilters={showFilters}
                         setShowFilters={setShowFilters}
                     />
@@ -963,50 +1014,49 @@
                                         />
                                     </div>
 
+                                    <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-full">
+                                        <button 
+                                            onClick={() => setShowSecularOnly(!showSecularOnly)} 
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${showSecularOnly ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                            title="Filter meetings for secular, agnostic, atheist, and freethinker groups"
+                                        >
+                                            <Icons.Atom size={14} /> <span className="hidden lg:inline">Secular</span>
+                                        </button>
+
+                                        <button 
+                                            onClick={() => setShowWomenOnly(!showWomenOnly)} 
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${showWomenOnly ? 'bg-pink-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                            title="Filter meetings for women only"
+                                        >
+                                            <Icons.Venus size={14} /> <span className="hidden lg:inline">Women</span>
+                                        </button>
+
+                                        <button 
+                                            onClick={() => setShowUSAOnly(!showUSAOnly)} 
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${showUSAOnly ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                            title="Filter meetings located in the United States"
+                                        >
+                                            <Icons.Flag size={14} /> <span className="hidden lg:inline">USA</span>
+                                        </button>
+
+                                        <button 
+                                            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} 
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${showFavoritesOnly ? 'bg-yellow-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                            title="Show only your favorited meetings"
+                                        >
+                                            <Icons.Star size={14} fill={showFavoritesOnly ? "currentColor" : "none"}/> <span className="hidden lg:inline">Favs</span>
+                                        </button>
+                                    </div>
+
                                     <button 
                                         onClick={() => setShowFilters(!showFilters)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showFilters ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${showFilters ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                                     >
                                         <Icons.Filter size={16} />
-                                        <span className="hidden lg:inline">Filters</span>
-                                        {showFilters ? <Icons.ChevronUp size={14}/> : <Icons.ChevronDown size={14}/>}
-                                        { (selectedLangs.size > 0 || selectedFormats.size > 0) && 
-                                            <span className="flex h-2 w-2 rounded-full bg-blue-600"></span> 
+                                        <span>Filters</span>
+                                        { (selectedLangs.size > 0 || selectedFormats.size > 0 || selectedFormatsOr.size > 0) && 
+                                            <span className={`flex h-2 w-2 rounded-full ${showFilters ? 'bg-white' : 'bg-blue-600'}`}></span> 
                                         }
-                                    </button>
-                                    
-                                    <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
-
-                                    <button 
-                                        onClick={() => setShowSecularOnly(!showSecularOnly)} 
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showSecularOnly ? 'bg-purple-100 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                        title="Filter meetings for secular, agnostic, atheist, and freethinker groups"
-                                    >
-                                        <Icons.Atom size={16} /> <span className="hidden lg:inline">Secular</span>
-                                    </button>
-
-                                    <button 
-                                        onClick={() => setShowWomenOnly(!showWomenOnly)} 
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showWomenOnly ? 'bg-pink-100 border-pink-200 text-pink-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                        title="Filter meetings for women only"
-                                    >
-                                        <Icons.Venus size={16} /> <span className="hidden lg:inline">Women</span>
-                                    </button>
-
-                                    <button 
-                                        onClick={() => setShowUSAOnly(!showUSAOnly)} 
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showUSAOnly ? 'bg-blue-100 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                        title="Filter meetings located in the United States"
-                                    >
-                                        <Icons.Flag size={16} /> <span className="hidden lg:inline">USA</span>
-                                    </button>
-
-                                    <button 
-                                        onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} 
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${showFavoritesOnly ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                        title="Show only your favorited meetings"
-                                    >
-                                        <Icons.Star size={16} fill={showFavoritesOnly ? "currentColor" : "none"}/> <span className="hidden lg:inline">Favs</span>
                                     </button>
                                 </div>
                             </div>
@@ -1034,7 +1084,7 @@
 
 
                     {/* Content */}
-                    <main className="max-w-6xl mx-auto px-4 py-6" style={{marginRight: showFilters ? '20rem' : '0', transition: 'margin-right 0.3s ease'}}>
+                    <main className="max-w-6xl mx-auto px-4 py-6">
                         
                         {isLoading && (
                              <div className="text-center py-10">
